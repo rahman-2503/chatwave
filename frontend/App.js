@@ -15,7 +15,7 @@ import {
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://localhost:5000';
+const API_URL = 'https://chatwave-backend-dtwb.onrender.com';
 
 export default function App() {
   const [username, setUsername] = useState('');

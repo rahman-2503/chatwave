@@ -136,7 +136,10 @@ ChatWave/
 3. Connect your GitHub repository
 4. Set build command: `cd backend && npm install`
 5. Set start command: `cd backend && npm start`
-6. Add environment variables in Render dashboard
+6. Add environment variables in Render dashboard:
+   - `PORT=5000`
+   - `MONGODB_URI=<your-mongodb-atlas-uri>`
+   - `CLIENT_URL=<your-frontend-url>`
 7. Deploy
 
 ### MongoDB Atlas
@@ -145,6 +148,10 @@ ChatWave/
 2. Create a database user
 3. Whitelist IP addresses (or allow all for development)
 4. Get connection string and add to `.env`
+
+### Local Development
+
+The backend uses an in-memory data store when no cloud MongoDB URI is configured, so it works out of the box without any database setup.
 
 ## Design Decisions
 
