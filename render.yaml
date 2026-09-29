@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: chatwave-web
+    runtime: static
+    buildCommand: cd web-client && npm install && npm run build
+    staticPublishPath: ./web-client/dist
+    routes:
+      - type: rewrite
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://chatwave-backend-dtwb.onrender.com

@@ -27,6 +27,18 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.get('/', (req, res) => {
+  res.json({
+    name: 'ChatWave API',
+    status: 'running',
+    endpoints: {
+      health: 'GET /health',
+      sendMessage: 'POST /api/messages',
+      history: 'GET /api/messages/history',
+    },
+  });
+});
+
 app.use(notFound);
 app.use(errorHandler);
 
