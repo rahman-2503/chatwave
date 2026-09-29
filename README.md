@@ -18,6 +18,7 @@ A full-stack real-time chat application: **React 18 (Vite)** web client + **Node
 | Username-based login (no password) | Yes |
 | Typing indicator | Yes |
 | Online / offline user presence | Yes |
+| Message delivered / read receipts (✓ / ✓✓) | Yes |
 | Connection & disconnection handling with auto-reconnect | Yes |
 | Graceful error handling (API, socket, UI) | Yes |
 | MongoDB Atlas persistence | Yes |
@@ -102,7 +103,7 @@ npm run dev               # or: npm start
 
 Verify: http://localhost:5000/health
 
-> If `MONGODB_URI` is absent or points to localhost, the server falls back to an in-memory store so it runs with zero setup. Data is not persisted in that mode.
+> If `MONGODB_URI` is absent, points to localhost, or the Atlas cluster is unreachable, the server logs a warning and falls back to an in-memory store instead of crashing. Data is not persisted in that mode, so history resets on restart.
 
 ### 2. Web client
 
@@ -198,7 +199,7 @@ curl -X POST https://chatwave-backend-dtwb.onrender.com/api/messages \
 | `send_message` | `{ username, text }` | Persist and broadcast a message |
 | `typing` | `username: string` | Show typing indicator to others |
 | `stop_typing` | `username: string` | Clear typing indicator |
-| `message_read` | `{ messageId, username }` | Mark a message read |
+| `message_read` | `{ messageId, reader }` | Mark a message read |
 
 ### Server → Client
 
@@ -210,7 +211,7 @@ curl -X POST https://chatwave-backend-dtwb.onrender.com/api/messages \
 | `user_offline` | `username` | A user disconnected |
 | `user_typing` | `username` | Someone is typing |
 | `user_stop_typing` | `username` | Typing stopped |
-| `message_status_update` | `{ messageId, status, username }` | Read receipt |
+| `message_status_update` | `{ messageId, status, reader }` | Receipt update (`delivered` → sender, `read` → everyone) |
 | `error` | `{ message }` | Socket-level failure |
 
 Presence is tracked per socket id in a `Map`, so multiple tabs from the same user are handled independently.
@@ -229,8 +230,10 @@ Spins up two real Socket.io clients and asserts the full feature set:
 ```
 PASS  two clients connected
 PASS  A -> B real-time delivery
+PASS  delivered receipt to sender
 PASS  B -> A real-time delivery
 PASS  typing indicator
+PASS  read receipt back to sender
 PASS  stop typing
 PASS  online user list
 PASS  disconnect / offline event
@@ -241,7 +244,19 @@ PASS  timestamps stored
 PASS  health endpoint
 ```
 
-Result: **12/12 passing**, verified against both the local server and the live deployment.
+Result: **14/14 passing**, verified against both the local server and the live deployment.
+
+### Message delivery lifecycle
+
+A message moves through three states, shown as ticks on the sender's bubble:
+
+| State | Tick | Trigger |
+|---|---|---|
+| `sent` | ✓ | Message persisted and broadcast |
+| `delivered` | ✓✓ | At least one other client was connected at send time |
+| `read` | ✓✓ bold | The recipient's client rendered it and emitted `message_read` |
+
+Read receipts are emitted per message id and tracked client-side, so a receipt is never sent twice for the same message.
 
 ---
 
