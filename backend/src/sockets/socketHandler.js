@@ -26,6 +26,16 @@ const socketHandler = (io) => {
         }
         const message = memoryStore.createMessage({ username, text });
         io.emit('receive_message', message);
+
+        const hasOtherClients = onlineUsers.size > 1;
+        if (hasOtherClients) {
+          memoryStore.updateMessageStatus(message._id, 'delivered');
+          socket.emit('message_status_update', {
+            messageId: message._id,
+            status: 'delivered',
+            username,
+          });
+        }
       } catch (error) {
         socket.emit('error', { message: 'Failed to send message' });
       }
@@ -41,9 +51,14 @@ const socketHandler = (io) => {
 
     socket.on('message_read', async (data) => {
       try {
-        const { messageId, username } = data;
+        const { messageId, reader } = data;
+        if (!messageId || !reader) return;
         memoryStore.updateMessageStatus(messageId, 'read');
-        io.emit('message_status_update', { messageId, status: 'read', username });
+        io.emit('message_status_update', {
+          messageId,
+          status: 'read',
+          reader,
+        });
       } catch (error) {
         socket.emit('error', { message: 'Failed to update message status' });
       }

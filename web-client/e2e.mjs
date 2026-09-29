@@ -22,11 +22,17 @@ async function main() {
   await wait(500);
 
   const seen = new Promise((r) => b.on('receive_message', r));
+  const deliveredEvt = new Promise((r) => a.on('message_status_update', r));
   a.emit('send_message', { username: 'alice', text: 'Hello from Alice' });
   const m1 = await seen;
   m1.username === 'alice' && m1.text === 'Hello from Alice'
     ? ok('A -> B real-time delivery')
     : bad('A -> B real-time delivery');
+
+  const d = await Promise.race([deliveredEvt, wait(2000).then(() => null)]);
+  d && d.status === 'delivered' && d.messageId === m1._id
+    ? ok('delivered receipt to sender')
+    : bad('delivered receipt to sender');
 
   const seen2 = new Promise((r) => a.on('receive_message', r));
   b.emit('send_message', { username: 'bob', text: 'Hi Alice from Bob' });
@@ -36,6 +42,15 @@ async function main() {
   const typing = new Promise((r) => b.on('user_typing', r));
   a.emit('typing', 'alice');
   (await typing) === 'alice' ? ok('typing indicator') : bad('typing indicator');
+
+  const delivered = await Promise.race([deliveredEvt, wait(1500).then(() => null)]);
+
+  const readEvt = new Promise((r) => a.on('message_status_update', r));
+  b.emit('message_read', { messageId: m1._id, reader: 'bob' });
+  const rd = await Promise.race([readEvt, wait(2000).then(() => null)]);
+  rd && rd.status === 'read' && rd.messageId === m1._id
+    ? ok('read receipt back to sender')
+    : bad('read receipt back to sender');
 
   const stopped = new Promise((r) => b.on('user_stop_typing', r));
   a.emit('stop_typing', 'alice');

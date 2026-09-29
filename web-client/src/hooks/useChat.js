@@ -48,6 +48,12 @@ export function useChat(username) {
       });
     });
 
+    socket.on('message_status_update', ({ messageId, status }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, status } : m)),
+      );
+    });
+
     socket.on('online_users', (users) => setOnlineUsers(users));
 
     socket.on('user_online', (user) => {
@@ -102,6 +108,14 @@ export function useChat(username) {
     }, 1500);
   }, [username]);
 
+  const markRead = useCallback(
+    (messageId) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit('message_read', { messageId, reader: username });
+    },
+    [username],
+  );
+
   return {
     messages,
     onlineUsers,
@@ -110,5 +124,6 @@ export function useChat(username) {
     loadingHistory,
     sendMessage,
     notifyTyping,
+    markRead,
   };
 }

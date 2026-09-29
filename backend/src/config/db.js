@@ -1,20 +1,28 @@
 const mongoose = require('mongoose');
 
-const connectDB = async () => {
+const USE_MEMORY_STORE = () => {
+  if (process.env.USE_MEMORY_STORE === 'true') return true;
   const uri = process.env.MONGODB_URI;
+  if (!uri) return true;
+  return uri.includes('localhost') || uri.includes('127.0.0.1');
+};
 
-  if (uri && !uri.includes('localhost') && !uri.includes('127.0.0.1')) {
-    try {
-      const conn = await mongoose.connect(uri);
-      console.log(`MongoDB connected: ${conn.connection.host}`);
-      return;
-    } catch (error) {
-      console.error(`MongoDB connection error: ${error.message}`);
-      process.exit(1);
-    }
+const connectDB = async () => {
+  if (USE_MEMORY_STORE()) {
+    console.log('Storage: in-memory (data resets on restart)');
+    return;
   }
 
-  console.log('Using in-memory data store for local development');
+  try {
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+    });
+    console.log(`Storage: MongoDB (${conn.connection.host})`);
+  } catch (error) {
+    console.error(`MongoDB connection failed: ${error.message}`);
+    console.error('Falling back to in-memory store. History will not persist.');
+    process.env.USE_MEMORY_STORE = 'true';
+  }
 };
 
 module.exports = connectDB;

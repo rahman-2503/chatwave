@@ -12,15 +12,27 @@ export default function ChatScreen({ username, onLeave }) {
     loadingHistory,
     sendMessage,
     notifyTyping,
+    markRead,
   } = useChat(username);
 
   const [draft, setDraft] = useState('');
   const listRef = useRef(null);
+  const readRef = useRef(new Set());
 
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, typingUsers]);
+
+  useEffect(() => {
+    messages.forEach((m) => {
+      if (m.username === username) return;
+      if (m.status === 'read') return;
+      if (readRef.current.has(m._id)) return;
+      readRef.current.add(m._id);
+      markRead(m._id);
+    });
+  }, [messages, username, markRead]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
