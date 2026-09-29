@@ -23,6 +23,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "22e8b3f7-4f31-4851-8756-19fff7e4a60f"
+      },
+      "apiUrl": "https://chatwave-backend-dtwb.onrender.com"
+    },
+    "owner": "rahman5187"
   }
 }

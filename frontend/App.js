@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,10 @@ import {
 import { io } from 'socket.io-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'https://chatwave-backend-dtwb.onrender.com';
+const API_URL =
+  Platform.OS === 'web'
+    ? 'http://localhost:5000'
+    : 'https://chatwave-backend-dtwb.onrender.com';
 
 export default function App() {
   const [username, setUsername] = useState('');
@@ -46,7 +49,6 @@ export default function App() {
       if (stored) {
         setUsername(stored);
         setIsLoggedIn(true);
-        initializeSocket(stored);
       }
     } catch (error) {
       console.error('Error checking stored username:', error);
@@ -54,57 +56,61 @@ export default function App() {
   };
 
   const initializeSocket = (user) => {
-    socketRef.current = io(API_URL, {
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+    try {
+      socketRef.current = io(API_URL, {
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 2000,
+        timeout: 10000,
+      });
 
-    socketRef.current.on('connect', () => {
-      setIsConnected(true);
-      socketRef.current.emit('user_join', user);
-    });
+      socketRef.current.on('connect', () => {
+        setIsConnected(true);
+        socketRef.current.emit('user_join', user);
+      });
 
-    socketRef.current.on('disconnect', () => {
-      setIsConnected(false);
-    });
+      socketRef.current.on('disconnect', () => {
+        setIsConnected(false);
+      });
 
-    socketRef.current.on('connect_error', () => {
-      setIsConnected(false);
-      Alert.alert('Connection Error', 'Unable to connect to server');
-    });
+      socketRef.current.on('connect_error', () => {
+        setIsConnected(false);
+      });
 
-    socketRef.current.on('receive_message', (message) => {
-      setMessages((prev) => [...prev, message]);
-    });
+      socketRef.current.on('receive_message', (message) => {
+        setMessages((prev) => [...prev, message]);
+      });
 
-    socketRef.current.on('online_users', (users) => {
-      setOnlineUsers(users);
-    });
+      socketRef.current.on('online_users', (users) => {
+        setOnlineUsers(users);
+      });
 
-    socketRef.current.on('user_online', (user) => {
-      setOnlineUsers((prev) =>
-        prev.includes(user) ? prev : [...prev, user]
-      );
-    });
+      socketRef.current.on('user_online', (user) => {
+        setOnlineUsers((prev) =>
+          prev.includes(user) ? prev : [...prev, user]
+        );
+      });
 
-    socketRef.current.on('user_offline', (user) => {
-      setOnlineUsers((prev) => prev.filter((u) => u !== user));
-    });
+      socketRef.current.on('user_offline', (user) => {
+        setOnlineUsers((prev) => prev.filter((u) => u !== user));
+      });
 
-    socketRef.current.on('user_typing', (user) => {
-      setTypingUsers((prev) =>
-        prev.includes(user) ? prev : [...prev, user]
-      );
-    });
+      socketRef.current.on('user_typing', (user) => {
+        setTypingUsers((prev) =>
+          prev.includes(user) ? prev : [...prev, user]
+        );
+      });
 
-    socketRef.current.on('user_stop_typing', (user) => {
-      setTypingUsers((prev) => prev.filter((u) => u !== user));
-    });
+      socketRef.current.on('user_stop_typing', (user) => {
+        setTypingUsers((prev) => prev.filter((u) => u !== user));
+      });
 
-    socketRef.current.on('error', (error) => {
-      Alert.alert('Error', error.message);
-    });
+      socketRef.current.on('error', (error) => {
+        console.error('Socket error:', error);
+      });
+    } catch (error) {
+      console.error('Socket initialization error:', error);
+    }
   };
 
   const handleLogin = async () => {
@@ -115,7 +121,7 @@ export default function App() {
     try {
       await AsyncStorage.setItem('chatwave_username', username.trim());
       setIsLoggedIn(true);
-      initializeSocket(username.trim());
+      setTimeout(() => initializeSocket(username.trim()), 500);
     } catch (error) {
       Alert.alert('Error', 'Failed to save username');
     }
@@ -145,11 +151,13 @@ export default function App() {
   const loadHistory = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/messages/history`);
+      const response = await fetch(`${API_URL}/api/messages/history`, {
+        signal: AbortSignal.timeout(10000),
+      });
       const data = await response.json();
       setMessages(data);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load chat history');
+      console.error('Failed to load history:', error);
     } finally {
       setIsLoading(false);
     }
@@ -168,7 +176,7 @@ export default function App() {
     });
   };
 
-  const renderMessage = ({ item }) => {
+  const renderMessage = useCallback(({ item }) => {
     const isOwn = item.username === username;
     return (
       <View
@@ -182,7 +190,7 @@ export default function App() {
         <Text style={styles.messageTime}>{formatTime(item.timestamp)}</Text>
       </View>
     );
-  };
+  }, [username]);
 
   if (!isLoggedIn) {
     return (
@@ -223,9 +231,17 @@ export default function App() {
         </View>
       </View>
 
+      {!isConnected && (
+        <View style={styles.offlineBar}>
+          <Text style={styles.offlineText}>
+            Server connecting... Please wait or check your internet.
+          </Text>
+        </View>
+      )}
+
       <View style={styles.onlineBar}>
         <Text style={styles.onlineText}>
-          Online: {onlineUsers.join(', ')}
+          Online: {onlineUsers.join(', ') || 'No users'}
         </Text>
       </View>
 
@@ -244,14 +260,16 @@ export default function App() {
         keyExtractor={(item) => item._id}
         style={styles.messageList}
         contentContainerStyle={styles.messageListContent}
-        onContentSizeChange={() =>
-          flatListRef.current?.scrollToEnd({ animated: true })
-        }
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        windowSize={10}
+        initialNumToRender={15}
+        updateCellsBatchingPeriod={100}
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={90}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.inputContainer}>
           <TextInput
@@ -351,6 +369,15 @@ const styles = StyleSheet.create({
   onlineText: {
     fontSize: 12,
     color: '#4338ca',
+  },
+  offlineBar: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  offlineText: {
+    fontSize: 12,
+    color: '#92400e',
   },
   typingBar: {
     backgroundColor: '#fef3c7',
